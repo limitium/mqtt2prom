@@ -1,4 +1,5 @@
 # Prometheus exporter for MQTT
+![ci](https://github.com/limitium/mqtt2prom/workflows/ci/badge.svg)
 
 ## Description:
 
