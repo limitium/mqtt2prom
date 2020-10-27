@@ -148,11 +148,9 @@ def _on_message(client, userdata, msg):
     logging.debug(
         f'_on_message Msg received on topic: {msg.topic}, Value: {str(msg.payload)}')
     path = msg.topic.split('/')
-    if len(path) != 4:
+    if len(path) != 6:
         return
-    (lim, ward, sensor, param) = path;
-    user = 'lim'
-    zone = 'mars1'
+    (lim, ward, user, zone, sensor, param) = path;
 
     _export_to_prometheus(userdata['metrics']['users'], user, zone, sensor, param, msg.payload)
     add_exporter_metrics(userdata['metrics'])
