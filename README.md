@@ -1,5 +1,5 @@
 # Prometheus exporter for MQTT
-![ci](https://github.com/limitium/mqtt2prom/workflows/ci/badge.svg)
+![Build&push docker image](https://github.com/limitium/mqtt2prom/workflows/Build&push%20docker%20image/badge.svg)
 
 ## Description:
 
