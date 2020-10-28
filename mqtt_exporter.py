@@ -227,7 +227,7 @@ def histogram(metrics, user, zone, sensor, param, value):
 
 def add_exporter_metrics(metrics):
     if 'memory' not in metrics['exporter']:
-        metrics['exporter']['memory'] = prometheus.Gauge('mqtt_exporter_usage_memory_kb', 'Memory usage')
+        metrics['exporter']['memory'] = prometheus.Gauge('mqtt_exporter_usage_memory_mb', 'Memory usage')
     metrics['exporter']['memory'].set(getCurrentMemoryUsage())
     
     if 'metrics_total' not in metrics['exporter']:
@@ -254,7 +254,6 @@ def _signal_handler(sig, frame):
     sys.exit(0)
 
 def getCurrentMemoryUsage():
-    return 1
     ''' Memory usage in kB '''
     with open('/proc/self/status') as f:
         memusage = f.read().split('VmRSS:')[1].split('\n')[0][:-3]
