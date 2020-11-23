@@ -279,7 +279,6 @@ def _signal_handler(sig, frame):
 
 
 def getCurrentMemoryUsage():
-    return 100
     ''' Memory usage in kB '''
     with open('/proc/self/status') as f:
         memusage = f.read().split('VmRSS:')[1].split('\n')[0][:-3]
