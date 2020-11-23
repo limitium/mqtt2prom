@@ -28,5 +28,5 @@ See exampleconf/ for examples.
 
 ## Todo:
 
-Add persistence of metrics on restart
-Add TTL for metrics
+- Add persistence of metrics on restart
+- Add TTL for metrics
