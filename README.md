@@ -11,7 +11,7 @@ Converts MQTT data from `${topic}/userName/zoneName/sensorName/parameterType val
 
 - Create a folder to hold the config (default: "conf/")
 - Add config in yaml format to the folder. (See exampleconf/conf.yaml for details)
-- Run  ./mqtt_exporter.py
+- Run  ./mqtt_exporter.py or Docker `docker run -v /Users/limi/projects/mqtt_exporter/conf:/usr/src/app/conf mqtt2prom`
 - Profit!
 
 ## Config:

@@ -13,7 +13,9 @@ import time
 import signal
 import sys
 from yamlreader import yaml_load
+from prometheus_client.metrics_core import METRIC_LABEL_NAME_RE
 
+USER_NAME_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
 VERSION = '0.1'
 
 
@@ -145,14 +147,26 @@ def _on_connect(client, userdata, flags, rc):
 # noinspection PyUnusedLocal
 def _on_message(client, userdata, msg):
     """The callback for when a PUBLISH message is received from the server."""
+    payload = msg.payload
     logging.debug(
-        f'_on_message Msg received on topic: {msg.topic}, Value: {str(msg.payload)}')
+        f'_on_message Msg received on topic: {msg.topic}, Value: {str(payload)}')
     path = msg.topic.split('/')
     if len(path) != 6:
         return
-    (lim, ward, user, zone, sensor, param) = path;
+    (lim, ward, user, zone, sensor, param) = path
+    
+    label = zone + '_' + sensor + '_' + param
+    if not METRIC_LABEL_NAME_RE.match(label):
+        return
+    if not USER_NAME_RE.match(user):
+        return
+    try:
+        float(payload)
+    except ValueError:
+        logging.critical(f'Payload isn\' float {payload}')
 
-    _export_to_prometheus(userdata['metrics']['users'], user, zone, sensor, param, msg.payload)
+    _export_to_prometheus(
+        userdata['metrics']['users'], user, label, payload)
     add_exporter_metrics(userdata['metrics'])
 
 
@@ -165,7 +179,7 @@ def _mqtt_init(mqtt_config):
             'exporter': {},
             'users': {}
         }
-        })
+    })
     mqtt_client.on_connect = _on_connect
     mqtt_client.on_message = _on_message
 
@@ -183,56 +197,66 @@ def _mqtt_init(mqtt_config):
     return mqtt_client
 
 
-def _export_to_prometheus(metrics, user, zone, sensor, param, value):
+def _export_to_prometheus(metrics, user, label, value):
     """Export metric and labels to prometheus."""
-    gauge(metrics, user, zone, sensor, param, value)
+    try:
+        gauge(metrics, user, label, value)
+    except ValueError as err:
+        logging.critical(f'Unable to update metric {str(err)}')
     logging.debug(
-        f'_export_to_prometheus metric {user}-{zone}-{sensor}-{param} updated with value: {value}')
-    
+        f'_export_to_prometheus metric {user}-{label} updated with value: {value}')
 
-def gauge(metrics, user, zone, sensor, param, value):
+
+def gauge(metrics, user, label, value):
     """Define metric as Gauge, setting it to 'value'"""
-    get_prometheus_metric(metrics, user, zone, sensor, param,'gauge').set(value)
+    get_prometheus_metric(metrics, user, label, 'gauge').set(value)
 
 
-def get_prometheus_metric(metrics, user, zone, sensor, param, metric_type):
-    key = zone +'_'+ sensor +'_'+ param
+def get_prometheus_metric(metrics, user, label, metric_type):
+
     prometheus_metric_types = {'gauge': prometheus.Gauge,
-                                'counter': prometheus.Counter,
-                                'summary': prometheus.Summary,
-                                'histogram': prometheus.Histogram}
-
+                               'counter': prometheus.Counter,
+                               'summary': prometheus.Summary,
+                               'histogram': prometheus.Histogram}
+    key = user + label
     if key not in metrics or not metrics[key]:
-        metrics[key] = prometheus_metric_types[metric_type](key, '',['u'])
+        metrics[key] = prometheus_metric_types[metric_type](label, '', ['u'])
     return metrics[key].labels(user)
 
 
 def counter(metrics, user, zone, sensor, param, value):
     """Define metric as Counter, increasing it by 'value'"""
-    get_prometheus_metric(metrics, user, zone, sensor, param,'counter').inc(value)
+    get_prometheus_metric(metrics, user, zone, sensor,
+                          param, 'counter').inc(value)
 
 
 def summary(metrics, user, zone, sensor, param, value):
     """Define metric as summary, observing 'value'"""
-    get_prometheus_metric(metrics, user, zone, sensor, param,'summary').observe(value)
+    get_prometheus_metric(metrics, user, zone, sensor,
+                          param, 'summary').observe(value)
 
 
 def histogram(metrics, user, zone, sensor, param, value):
     """Define metric as histogram, observing 'value'"""
     # buckets = None
     # if 'buckets' in metric and metric['buckets']:
-        # buckets = metric['buckets'].split(',')
+    # buckets = metric['buckets'].split(',')
 
-    get_prometheus_metric(metrics, user, zone, sensor, param, value, 'histogram').observe(value)
+    get_prometheus_metric(metrics, user, zone, sensor,
+                          param, value, 'histogram').observe(value)
+
 
 def add_exporter_metrics(metrics):
     if 'memory' not in metrics['exporter']:
-        metrics['exporter']['memory'] = prometheus.Gauge('mqtt_exporter_usage_memory_mb', 'Memory usage')
+        metrics['exporter']['memory'] = prometheus.Gauge(
+            'mqtt_exporter_usage_memory_mb', 'Memory usage')
     metrics['exporter']['memory'].set(getCurrentMemoryUsage())
-    
+
     if 'metrics_total' not in metrics['exporter']:
-        metrics['exporter']['metrics_total'] = prometheus.Gauge('mqtt_exporter_metrics_total', 'Total metrics')
+        metrics['exporter']['metrics_total'] = prometheus.Gauge(
+            'mqtt_exporter_metrics_total', 'Total metrics')
     metrics['exporter']['metrics_total'].set(len(metrics['users'].keys()))
+
 
 def add_static_metric(timestamp):
     g = prometheus.Gauge('mqtt_exporter_timestamp', 'Startup time of exporter in millis since EPOC (static)',
@@ -253,12 +277,15 @@ def _signal_handler(sig, frame):
     logging.info('Received {0}'.format(signal.Signals(sig).name))
     sys.exit(0)
 
+
 def getCurrentMemoryUsage():
+    return 100
     ''' Memory usage in kB '''
     with open('/proc/self/status') as f:
         memusage = f.read().split('VmRSS:')[1].split('\n')[0][:-3]
 
     return int(memusage.strip())/1000
+
 
 def main():
     add_static_metric(int(time.time() * 1000))
