@@ -151,9 +151,9 @@ def _on_message(client, userdata, msg):
     logging.debug(
         f'_on_message Msg received on topic: {msg.topic}, Value: {str(payload)}')
     path = msg.topic.split('/')
-    if len(path) != 6:
+    if len(path) != 7:
         return
-    (lim, ward, user, zone, sensor, param) = path
+    (space, bloomy, v1, user, zone, sensor, param) = path
     
     label = zone + '_' + sensor + '_' + param
     if not METRIC_LABEL_NAME_RE.match(label):
@@ -290,11 +290,7 @@ def _signal_handler(sig, frame):
 
 
 def getCurrentMemoryUsage():
-    ''' Memory usage in kB '''
-    with open('/proc/self/status') as f:
-        memusage = f.read().split('VmRSS:')[1].split('\n')[0][:-3]
-
-    return int(memusage.strip())/1000
+    return 1
 
 
 def main():
