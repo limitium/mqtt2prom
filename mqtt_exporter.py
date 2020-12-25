@@ -167,6 +167,9 @@ def _on_message(client, userdata, msg):
 
     _export_to_prometheus(
         userdata['metrics']['users'], user, label, payload)
+    
+    clean_up_orphan_metrics(userdata['metrics']['users'], userdata['metric_ttl'])
+    
     add_exporter_metrics(userdata['metrics'])
 
 
@@ -175,6 +178,7 @@ def _mqtt_init(mqtt_config):
     logging.info(f'Connecting {str(mqtt_config)}')
     mqtt_client = mqtt.Client(userdata={
         'topic': mqtt_config['topic'],
+        'metric_ttl': mqtt_config['metric_ttl'],
         'metrics': {
             'exporter': {},
             'users': {}
@@ -220,8 +224,9 @@ def get_prometheus_metric(metrics, user, label, metric_type):
                                'histogram': prometheus.Histogram}
     key = user + label
     if key not in metrics or not metrics[key]:
-        metrics[key] = prometheus_metric_types[metric_type](label, '', ['u'])
-    return metrics[key].labels(user)
+        metrics[key] = {'metric':prometheus_metric_types[metric_type](label, '', ['u']), 'updated':time.time()}
+    metrics[key]['updated'] = time.time()
+    return metrics[key]['metric'].labels(user)
 
 
 def counter(metrics, user, zone, sensor, param, value):
@@ -244,6 +249,12 @@ def histogram(metrics, user, zone, sensor, param, value):
 
     get_prometheus_metric(metrics, user, zone, sensor,
                           param, value, 'histogram').observe(value)
+
+def clean_up_orphan_metrics(metrics, ttl):
+    for key in list(metrics.keys()):
+        if time.time() - metrics[key]['updated'] > ttl:
+            prometheus.REGISTRY.unregister(metrics[key]['metric'])
+            del metrics[key]
 
 
 def add_exporter_metrics(metrics):
