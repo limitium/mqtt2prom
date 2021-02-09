@@ -15,7 +15,7 @@ import sys
 from yamlreader import yaml_load
 from prometheus_client.metrics_core import METRIC_LABEL_NAME_RE
 
-USER_NAME_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
+USER_NAME_RE = re.compile(r'^[a-zA-Z0-9_]+$')
 VERSION = '0.1'
 
 
