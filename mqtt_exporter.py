@@ -15,7 +15,6 @@ import sys
 from yamlreader import yaml_load
 from prometheus_client.metrics_core import METRIC_LABEL_NAME_RE
 
-USER_NAME_RE = re.compile(r'^[a-zA-Z0-9_]+$')
 VERSION = '0.1'
 
 
@@ -154,11 +153,13 @@ def _on_message(client, userdata, msg):
     if len(path) != 7:
         return
     (space, bloomy, v1, user, zone, sensor, param) = path
+    user = user[:6]
+    zone = zone[:16]
+    sensor = sensor[:16]
+    param = param[:16]
     
-    label = zone + '_' + sensor + '_' + param
+    label = user + '_' + zone + '_' + sensor + '_' + param
     if not METRIC_LABEL_NAME_RE.match(label):
-        return
-    if not USER_NAME_RE.match(user):
         return
     try:
         float(payload)
@@ -166,7 +167,7 @@ def _on_message(client, userdata, msg):
         logging.critical(f'Payload isn\' float {payload}')
 
     _export_to_prometheus(
-        userdata['metrics']['users'], user, label, payload)
+        userdata['metrics']['users'], label, payload)
     
     clean_up_orphan_metrics(userdata['metrics']['users'], userdata['metric_ttl'])
     
@@ -201,54 +202,27 @@ def _mqtt_init(mqtt_config):
     return mqtt_client
 
 
-def _export_to_prometheus(metrics, user, label, value):
+def _export_to_prometheus(metrics, label, value):
     """Export metric and labels to prometheus."""
     try:
-        gauge(metrics, user, label, value)
+        gauge(metrics, label, value)
     except ValueError as err:
         logging.critical(f'Unable to update metric {str(err)}')
     logging.debug(
-        f'_export_to_prometheus metric {user}-{label} updated with value: {value}')
+        f'_export_to_prometheus metric {label} updated with value: {value}')
 
 
-def gauge(metrics, user, label, value):
+def gauge(metrics, label, value):
     """Define metric as Gauge, setting it to 'value'"""
-    get_prometheus_metric(metrics, user, label, 'gauge').set(value)
+    get_prometheus_metric(metrics, label).set(value)
 
 
-def get_prometheus_metric(metrics, user, label, metric_type):
-
-    prometheus_metric_types = {'gauge': prometheus.Gauge,
-                               'counter': prometheus.Counter,
-                               'summary': prometheus.Summary,
-                               'histogram': prometheus.Histogram}
-    key = user + label
+def get_prometheus_metric(metrics, label):
+    key = label
     if key not in metrics or not metrics[key]:
-        metrics[key] = {'metric':prometheus_metric_types[metric_type](label, '', ['u']), 'updated':time.time()}
+        metrics[key] = {'metric':prometheus.Gauge(label, ''), 'updated':time.time()}
     metrics[key]['updated'] = time.time()
-    return metrics[key]['metric'].labels(user)
-
-
-def counter(metrics, user, zone, sensor, param, value):
-    """Define metric as Counter, increasing it by 'value'"""
-    get_prometheus_metric(metrics, user, zone, sensor,
-                          param, 'counter').inc(value)
-
-
-def summary(metrics, user, zone, sensor, param, value):
-    """Define metric as summary, observing 'value'"""
-    get_prometheus_metric(metrics, user, zone, sensor,
-                          param, 'summary').observe(value)
-
-
-def histogram(metrics, user, zone, sensor, param, value):
-    """Define metric as histogram, observing 'value'"""
-    # buckets = None
-    # if 'buckets' in metric and metric['buckets']:
-    # buckets = metric['buckets'].split(',')
-
-    get_prometheus_metric(metrics, user, zone, sensor,
-                          param, value, 'histogram').observe(value)
+    return metrics[key]['metric']
 
 def clean_up_orphan_metrics(metrics, ttl):
     for key in list(metrics.keys()):
