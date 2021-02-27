@@ -160,14 +160,14 @@ def _on_message(client, userdata, msg):
     
     label = user + '_' + zone + '_' + sensor + '_' + param
     if not METRIC_LABEL_NAME_RE.match(label):
+        logging.debug(f'Wrong label "{label}"')
         return
     try:
         float(payload)
     except ValueError:
         logging.critical(f'Payload isn\' float {payload}')
 
-    _export_to_prometheus(
-        userdata['metrics']['users'], label, payload)
+    _export_to_prometheus(userdata['metrics']['users'], label, payload)
     
     clean_up_orphan_metrics(userdata['metrics']['users'], userdata['metric_ttl'])
     
@@ -219,8 +219,9 @@ def gauge(metrics, label, value):
 
 def get_prometheus_metric(metrics, label):
     key = label
-    if key not in metrics or not metrics[key]:
+    if key not in metrics:
         metrics[key] = {'metric':prometheus.Gauge(label, ''), 'updated':time.time()}
+        logging.debug(f'get_prometheus_metric create new metric{label}')
     metrics[key]['updated'] = time.time()
     return metrics[key]['metric']
 
@@ -229,6 +230,7 @@ def clean_up_orphan_metrics(metrics, ttl):
         if time.time() - metrics[key]['updated'] > ttl:
             prometheus.REGISTRY.unregister(metrics[key]['metric'])
             del metrics[key]
+            logging.debug(f'clean_up_orphan_metrics remove metric{key}')
 
 
 def add_exporter_metrics(metrics):
